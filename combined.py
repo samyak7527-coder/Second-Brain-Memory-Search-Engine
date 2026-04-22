@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
 
+from backend.auth import init_db, register_user, authenticate_user
 from backend.ingest import ingest_text
 from backend.rag import generate_answer
 
@@ -197,7 +198,7 @@ header [data-testid="stSidebarCollapsedControl"] { visibility: visible !importan
 [data-testid="stSidebar"] .stTextInput input {
   background: var(--surface) !important;
   border: 1px solid var(--sb4) !important;
-  border-radius: var(--r-sm) !important;
+  border-radius: var(--r-sm) !important;  
   color: var(--ink) !important;
   font-family: 'Outfit', sans-serif !important;
   font-size: 14px !important;
@@ -1622,6 +1623,7 @@ def highlight_query(text: str, query: str, max_len: int = 280) -> str:
 # ─────────────────────────────────────────────
 
 defaults = {
+    "logged_in": False, "username": None,
     "messages": [], "ingested_chunks": 0, "active_tab": "docs",
     "yt_processed": False, "yt_summary": "", "yt_chat_history": [],
     "yt_qa_chain": None, "yt_transcript_warn": None,
@@ -1640,6 +1642,43 @@ for k, v in defaults.items():
 
 if not st.session_state.digest_history:
     st.session_state.digest_history = load_digest_history()
+
+init_db()
+
+if not st.session_state.logged_in:
+    st.markdown("""
+    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; margin-top: 10vh;">
+      <div class="sb-blob" style="width: 60px; height: 60px; font-size: 30px; margin-bottom: 20px;">🧠</div>
+      <div class="pg-h1" style="margin-bottom: 30px;">Second Brain Login</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    _, col_auth, _ = st.columns([1, 1, 1])
+    with col_auth:
+        tab_login, tab_reg = st.tabs(["🔐 Login", "📝 Register"])
+        
+        with tab_login:
+            login_user = st.text_input("Username", key="login_user")
+            login_pass = st.text_input("Password", type="password", key="login_pass")
+            if st.button("Login", type="primary", use_container_width=True):
+                if authenticate_user(login_user, login_pass):
+                    st.session_state.logged_in = True
+                    st.session_state.username = login_user
+                    st.rerun()
+                else:
+                    st.error("Invalid username or password.")
+                    
+        with tab_reg:
+            reg_user = st.text_input("Choose Username", key="reg_user")
+            reg_pass = st.text_input("Choose Password", type="password", key="reg_pass")
+            if st.button("Register", use_container_width=True):
+                success, msg = register_user(reg_user, reg_pass)
+                if success:
+                    st.success(msg + " You can now switch to Login.")
+                else:
+                    st.error(msg)
+                    
+    st.stop()
 
 
 # ─────────────────────────────────────────────
@@ -1929,6 +1968,15 @@ with st.sidebar:
 # ─────────────────────────────────────────────
 # MAIN CONTENT
 # ─────────────────────────────────────────────
+
+col_welc1, col_welc2 = st.columns([4, 1])
+with col_welc1:
+    st.markdown(f'<div class="pg-h1" style="font-size: 20px; color: var(--amber); margin-bottom: 20px; border-bottom: 1px solid var(--bg3); padding-bottom: 10px;">👋 Welcome, {st.session_state.username}</div>', unsafe_allow_html=True)
+with col_welc2:
+    if st.button("🚪 Logout", use_container_width=True):
+        st.session_state.logged_in = False
+        st.session_state.username = None
+        st.rerun()
 
 # ══════════════════════════════════════════════
 # TAB: Document RAG
